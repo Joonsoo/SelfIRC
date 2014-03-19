@@ -8,6 +8,7 @@
         <script>
             $(document).ready(function() {
                 var socket = io.connect();
+                var initText = "";
                 var scrollToBottom = function() {
                     $(document).scrollTop($("#allLogs").prop("scrollHeight"));
                 };
@@ -25,11 +26,17 @@
                     scrollToBottom();
                 });
                 $("#typing").on("keydown", function(e) {
-                    if (e.keyCode === 13) {
-                        var msg = $("#typing").val().trim();
-                        socket.emit("send", msg);
-                        $("#typing").val("");
+                    switch (e.keyCode) {
+                    case 13:    // RETURN
+                        var msg = $("#typing").val();
+                        if (msg.charAt(0) === ':') {
+                            initText = msg.substring(1);
+                        } else {
+                            socket.emit("send", msg.trim());
+                        }
+                        $("#typing").val(initText);
                         e.preventDefault();
+                        break;
                     }
                 });
             });
