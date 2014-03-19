@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="js/underscore.js"></script>
+        <script src="js/jquery.js"></script>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+            $(document).ready(function() {
+                var socket = io.connect();
+                var scrollToBottom = function() {
+                    $(document).scrollTop($("#allLogs").prop("scrollHeight"));
+                };
+                socket.on("log", function(data) {
+                    _.each(data, function (log) {
+                        var logDiv;
+                        if ($("div[data-logid=" + log.id + "]").length === 0) {
+                            logDiv = $("<div>").text(log.msg).attr("data-logid", log.id);
+                        } else {
+                            logDiv = $("div[data-logid=" + log.id + "]");
+                        }
+                        logDiv.addClass(log.type);
+                        $("#allLogs").append(logDiv);
+                    });
+                    scrollToBottom();
+                });
+                $("#typing").on("keydown", function(e) {
+                    if (e.keyCode === 13) {
+                        var msg = $("#typing").val().trim();
+                        socket.emit("send", msg);
+                        $("#typing").val("");
+                        e.preventDefault();
+                    }
+                });
+            });
+        </script>
+        <style>
+            .cs { color: green; }
+            .sc { color: blue; }
+            .log { color: lightGray; }
+            #allLogs {
+                padding-bottom: 30px;
+            }
+            #typing {
+                position: fixed;
+                left: 0;
+                bottom: 0;
+                width: 100%;
+                height: 30px;
+                margin: 0;
+                padding: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="allLogs"></div>
+        <textarea id="typing"></textarea>
+    </body>
+</html>
