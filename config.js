@@ -1,11 +1,11 @@
 var config = {};
 
 config.ircOpt = {
-    host: "chat.freenode.net",
+    host: "chat.example.com",
     port: 6667,
-    username: "Joonsoo",
-    fullname: "Joonsoo Jeon",
-    nickname: "Joonsoo1"
+    username: "SelfIRC",
+    fullname: "Self Internet Relay Chat",
+    nickname: "SelfIRC"
 };
 
 config.httpOpt = {
@@ -15,7 +15,8 @@ config.httpOpt = {
 config.sqlOpt = {
     host: "localhost",
     user: "",
-    password: ""
+    password: "",
+    db: ""
 };
 
 module.exports = config;
