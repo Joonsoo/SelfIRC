@@ -31,18 +31,54 @@ function newLogItem(type, msg) {
     return newlog;
 }
 
+var client;
 function write(msg) {
     client.write(msg);
     client.write(ircSeparator);
     broadcastNewLogs([newLogItem("cs", msg)]);
 }
-var client = net.connect({host: "chat.freenode.net", port: 6667}, function() {
-    console.log("Client connected");
-    // USER Joonsoo . . :Joonsoo Jeon
-    // NICK Joonsoo1
-    write("USER " + ircOpt.username + " . . :" + ircOpt.fullname);
-    write("NICK " + ircOpt.nickname);
-});
+function startIRC() {
+    client = net.connect({host: "chat.freenode.net", port: 6667}, function() {
+        broadcastNewLogs([newLogItem("log", "Client connected")]);
+        console.log("Client connected");
+        // USER Joonsoo . . :Joonsoo Jeon
+        // NICK Joonsoo1
+        write("USER " + ircOpt.username + " . . :" + ircOpt.fullname);
+        write("NICK " + ircOpt.nickname);
+    });
+    client.on("data", function(data) {
+        var lines = data.toString().split("\r\n");
+        var finePackets = (lines[lines.length - 1] === "");
+        if (finePackets) {
+            lines.pop();
+            if (lines.length === 0) return;
+        }
+        var newlogs = [];
+        if (lastServerMsg) {
+            lastServerMsg.msg += lines[0];
+            newlogs.push(lastServerMsg);
+        } else {
+            lastServerMsg = newLogItem("sc", lines[0]);
+            newlogs.push(lastServerMsg);
+        }
+        for (var i = 1; i < lines.length; i++) {
+            lastServerMsg = newLogItem("sc", lines[i]);
+            newlogs.push(lastServerMsg);
+        }
+        broadcastNewLogs(newlogs);
+        for (var i = 0; i < newlogs.length - 1; i++) {
+            processMsg(newlogs[i]);
+        }
+        if (finePackets) {
+            lastServerMsg = null;
+            processMsg(newlogs[newlogs.length - 1]);
+        }
+    });
+    client.on("end", function() {
+        broadcastNewLogs([newLogItem("log", "Connection closed")]);
+    });
+}
+startIRC();
 
 function broadcastNewLogs(newlogs) {
     _.each(broadcasting, function (socket) {
@@ -54,37 +90,6 @@ function processMsg(log) {
         write("PONG" + log.msg.substring(4));
     }
 }
-client.on("data", function(data) {
-    var lines = data.toString().split("\r\n");
-    var finePackets = (lines[lines.length - 1] === "");
-    if (finePackets) {
-        lines.pop();
-        if (lines.length === 0) return;
-    }
-    var newlogs = [];
-    if (lastServerMsg) {
-        lastServerMsg.msg += lines[0];
-        newlogs.push(lastServerMsg);
-    } else {
-        lastServerMsg = newLogItem("sc", lines[0]);
-        newlogs.push(lastServerMsg);
-    }
-    for (var i = 1; i < lines.length; i++) {
-        lastServerMsg = newLogItem("sc", lines[i]);
-        newlogs.push(lastServerMsg);
-    }
-    broadcastNewLogs(newlogs);
-    for (var i = 0; i < newlogs.length - 1; i++) {
-        processMsg(newlogs[i]);
-    }
-    if (finePackets) {
-        lastServerMsg = null;
-        processMsg(newlogs[newlogs.length - 1]);
-    }
-});
-client.on("end", function() {
-    broadcastNewLogs([newLogItem("log", "Connection closed")]);
-});
 
 var app = express();
 
@@ -103,9 +108,20 @@ httpServer.listen(httpOpt.port);
 
 io.listen(httpServer).sockets.on('connection', function (socket) {
     broadcasting.push(socket);
-    socket.emit("log", logs);
+    if (logs.length > 50) {
+        socket.emit("log", logs.slice(logs.length - 50));
+    } else {
+        socket.emit("log", logs);
+    }
     socket.on("send", function (data) {
-        write(data);
+        if (data === "/restart") {
+            broadcastNewLogs([newLogItem("log", "/restart")]);
+            if (client) client.end();
+            client = null;
+            startIRC();
+        } else {
+            write(data);
+        }
     });
     socket.on("disconnect", function () {
         broadcasting.splice(broadcasting.indexOf(socket));
