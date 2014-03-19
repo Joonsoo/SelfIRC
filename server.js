@@ -4,19 +4,14 @@ var fs = require("fs");
 var http = require("http");
 var _ = require("underscore");
 var express = require("express");
-var io = require('socket.io');
+var io = require("socket.io");
 
-var ircOpt = {
-    host: "chat.freenode.net",
-    port: 6667,
-    username: "Joonsoo",
-    fullname: "Joonsoo Jeon",
-    nickname: "Joonsoo1"
-};
+var config = require("./config.js");
 
-var httpOpt = {
-    port: 8911
-};
+console.log(config);
+var ircOpt = config.ircOpt;
+var httpOpt = config.httpOpt;
+var sqlOpt = config.sqlOpt;
 
 var logs = [];
 var lastServerMsg = null;
