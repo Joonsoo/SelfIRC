@@ -3,9 +3,10 @@
 	"version": "0.0.1",
 	"main": "server.js",
 	"dependencies": {
-		"express":"*",
-		"socket.io":"*",
-		"underscore":"*"
+		"express":"3.4.8",
+		"socket.io":"0.9.16",
+		"underscore":"1.6.0",
+        "node-mysql":"*"
 	}
 }
 
