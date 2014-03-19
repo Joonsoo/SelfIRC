@@ -99,6 +99,9 @@ app.use(express.cookieSession());
 app.get("/", function(req, res) {
     res.sendfile(__dirname + "/tmpl/index.html");
 });
+app.get("/alllogs", function(req, res) {
+    res.send(logs);
+});
 
 app.use(express.static(__dirname + "/static"));
 
