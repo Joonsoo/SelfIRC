@@ -10,15 +10,35 @@
             document.title = windowTitle;
             $(document).ready(function() {
                 var socket = io.connect();
+                var oldestLogId = null;
                 var initText = "";
                 var scrollToBottom = function() {
                     $(document).scrollTop($("#allLogs").prop("scrollHeight"));
                 };
-                socket.on("log", function(data) {
+                var ensureLogOrder = function() {
+                    var children = $("#allLogs").children();
+                    var inOrder = true;
+                    for (var i = 1; i < children.length; i++) {
+                        if (+($(children[i - 1]).attr("data-logid")) >= +($(children[i]).attr("data-logid"))) {
+                            inOrder = false;
+                            break;
+                        }
+                    }
+                    if (!inOrder) {
+                        console.log("need to sort");
+                        var sorted = _.sortBy(children, function (c) { return +($(c).attr("data-logid")); });
+                        $("#allLogs").empty();
+                        _.each(sorted, function (div) { $("#allLogs").append(div); });
+                    }
+                };
+                var processLogs = function(data) {
                     var newmsg = false;
-                    _.each(data, function (log) {
+                    _.each(data, function(log) {
+                        var timestamp = new Date().toISOString();
                         var logDiv;
                         var msg = log.msg;
+                        if (oldestLogId === null) oldestLogId = log.id;
+                        if (oldestLogId > log.id) oldestLogId = log.id;
                         if ($("div[data-logid=" + log.id + "]").length === 0) {
                             logDiv = $("<div>").attr("data-logid", log.id);
                         } else {
@@ -36,27 +56,44 @@
                                         logDiv.attr("data-rawmsg", log.msg).attr("title", log.msg);
                                         logDiv.addClass("chat");
                                         var msgbody = tokens[tokens.length - 1];
+                                        var receiverFilter = null;
                                         for (var i = 2; i < tokens.length; i++) {
                                             if (tokens[i].charAt(0) === ":") {
                                                 msgbody = tokens.slice(i).join(" ").substring(1);
+                                                receiverFilter = tokens.slice(2, i).join(" ");
                                                 break;
                                             }
                                         }
                                         var talker = tokens[0].substring(1, tokens[0].indexOf('!'));
-                                        msg = talker + ": " + msgbody;
+                                        if (receiverFilter) {
+                                            msg = "[" + receiverFilter + "] " + talker + ": " + msgbody;
+                                        } else {
+                                            msg = talker + ": " + msgbody;
+                                        }
                                         newmsg = true;
                                         break;
                                     }
                                 }
                             }
                         }
-                        logDiv.text(msg).addClass(log.type);
+                        logDiv.attr("data-timestamp", timestamp).text(msg).addClass(log.type);
                         $("#allLogs").append(logDiv);
                     });
+                    ensureLogOrder();
+                    return newmsg;
+                };
+                socket.on("log", function(data) {
+                    var newmsg = processLogs(data);
                     if (newmsg && !$("#typing").is(":focus")) {
                         document.title = windowTitle + " *";
                     }
                     scrollToBottom();
+                });
+                socket.on("older", function(data) {
+                    processLogs(data);
+                    if (data.length < 50) {
+                        $("#older").hide();
+                    }
                 });
                 $("#typing").on("keydown", function(e) {
                     switch (e.keyCode) {
@@ -75,8 +112,13 @@
                 $("#typing").on("focus", function() {
                     document.title = windowTitle;
                 });
+                $("#older").on("click", function() {
+                    socket.emit("older", {clientOldest: oldestLogId});
+                });
+                $("#typing").focus();
             });
         </script>
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
         <style>
             .cs { color: green; }
             .sc { color: lightGray; }
@@ -87,6 +129,7 @@
                 width: 100%;
                 font-size: 12pt;
                 padding-bottom: 20pt;
+                padding: 8px 8px 24pt 8px;
             }
             #typing {
                 position: fixed;
@@ -96,11 +139,12 @@
                 font-size: 15pt;
                 height: 20pt;
                 margin: 0;
-                padding: 0;
+                padding: 0 8px 0 8px;
             }
         </style>
     </head>
     <body>
+        <div id="older" class="btn btn-default btn-block">Retrieve older logs</div>
         <div id="allLogs"></div>
         <textarea id="typing"></textarea>
     </body>

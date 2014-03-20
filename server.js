@@ -104,29 +104,48 @@ var httpServer = http.createServer(app);
 
 httpServer.listen(httpOpt.port);
 
-io.listen(httpServer).sockets.on('connection', function (socket) {
+var iolisten = io.listen(httpServer);
+iolisten.set('log level', 0);
+iolisten.sockets.on('connection', function(socket) {
     broadcasting.push(socket);
     if (logs.length > 50) {
         socket.emit("log", logs.slice(logs.length - 50));
     } else {
         socket.emit("log", logs);
     }
-    socket.on("send", function (data) {
-        if (data === "/restart") {
+    socket.on("send", function(data) {
+        var lowerCased = data.toLowerCase().trim();
+        if (lowerCased === "/restart") {
             broadcastNewLogs([newLogItem("log", "/restart")]);
             if (client) client.end();
             client = null;
             startIRC();
+        } else if (lowerCased === "/save") {
+            var filename = saveLog();
+            broadcastNewLogs([newLogItem("log", "/save to " + filename)]);
+        } else if (lowerCased === "/clear") {
+            var filename = saveLog();
+            logs = [];
+            broadcastNewLogs([newLogItem("log", "/clear logs after save logs to " + filename)]);
         } else {
             write(data);
         }
+    });
+    socket.on("older", function(data) {
+        var oldest = data.clientOldest;
+        var start = oldest - 50;
+        socket.emit("older", _.filter(logs, function(log) { return log.id >= start && log.id < oldest; }));
     });
     socket.on("disconnect", function () {
         broadcasting.splice(broadcasting.indexOf(socket));
     });
 });
 
-process.on("exit", function () {
+var saveLog = function () {
     console.log("Saving logs...");
-    fs.writeFile("logs" + (new Date().getTime()) + ".txt", JSON.stringify(logs));
-});
+    var filename = "./logs/SelfIRC-logs-" + (new Date().getTime()) + ".txt";
+    fs.writeFile(filename, JSON.stringify(logs));
+    return filename;
+};
+setInterval(saveLog, 8*60*60*1000);		// every 8 hours
+process.on("exit", saveLog);			// on exit
