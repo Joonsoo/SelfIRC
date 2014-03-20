@@ -125,3 +125,8 @@ io.listen(httpServer).sockets.on('connection', function (socket) {
         broadcasting.splice(broadcasting.indexOf(socket));
     });
 });
+
+process.on("exit", function () {
+    console.log("Saving logs...");
+    fs.writeFile("logs" + (new Date().getTime()) + ".txt", JSON.stringify(logs));
+});
