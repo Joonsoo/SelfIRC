@@ -6,6 +6,8 @@
         <script src="js/jquery.js"></script>
         <script src="/socket.io/socket.io.js"></script>
         <script>
+            var windowTitle = "IRC";
+            document.title = windowTitle;
             $(document).ready(function() {
                 var socket = io.connect();
                 var initText = "";
@@ -13,16 +15,47 @@
                     $(document).scrollTop($("#allLogs").prop("scrollHeight"));
                 };
                 socket.on("log", function(data) {
+                    var newmsg = false;
                     _.each(data, function (log) {
                         var logDiv;
+                        var msg = log.msg;
                         if ($("div[data-logid=" + log.id + "]").length === 0) {
-                            logDiv = $("<div>").text(log.msg).attr("data-logid", log.id);
+                            logDiv = $("<div>").attr("data-logid", log.id);
                         } else {
                             logDiv = $("div[data-logid=" + log.id + "]");
                         }
-                        logDiv.addClass(log.type);
+                        if (msg.substring(0, 4) === "PING" || msg.substring(0, 4) === "PONG") {
+                            logDiv.addClass("pingpong");
+                        } else {
+                            if (log.type === "sc") {
+                                var tokens = msg.split(" ");
+                                if (tokens.length > 2) {
+                                    var command = tokens[1].toUpperCase();
+                                    switch (command) {
+                                    case "PRIVMSG":
+                                        logDiv.attr("data-rawmsg", log.msg).attr("title", log.msg);
+                                        logDiv.addClass("chat");
+                                        var msgbody = tokens[tokens.length - 1];
+                                        for (var i = 2; i < tokens.length; i++) {
+                                            if (tokens[i].charAt(0) === ":") {
+                                                msgbody = tokens.slice(i).join(" ").substring(1);
+                                                break;
+                                            }
+                                        }
+                                        var talker = tokens[0].substring(1, tokens[0].indexOf('!'));
+                                        msg = talker + ": " + msgbody;
+                                        newmsg = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        logDiv.text(msg).addClass(log.type);
                         $("#allLogs").append(logDiv);
                     });
+                    if (newmsg && !$("#typing").is(":focus")) {
+                        document.title = windowTitle + " *";
+                    }
                     scrollToBottom();
                 });
                 $("#typing").on("keydown", function(e) {
@@ -39,12 +72,17 @@
                         break;
                     }
                 });
+                $("#typing").on("focus", function() {
+                    document.title = windowTitle;
+                });
             });
         </script>
         <style>
             .cs { color: green; }
-            .sc { color: blue; }
+            .sc { color: lightGray; }
             .log { color: lightGray; }
+            .pingpong { display: none; }
+            .sc.chat { color: blue; }
             #allLogs {
                 width: 100%;
                 font-size: 12pt;
