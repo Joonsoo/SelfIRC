@@ -6,7 +6,8 @@
 		"express":"3.4.8",
 		"socket.io":"0.9.16",
 		"underscore":"1.6.0",
-        "node-mysql":"*"
+        "connect":"2.14.3",
+        "session.socket.io": "0.1.6"
 	}
 }
 

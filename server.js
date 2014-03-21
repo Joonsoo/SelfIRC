@@ -6,6 +6,8 @@ var http = require("http");
 var _ = require("underscore");
 var express = require("express");
 var io = require("socket.io");
+var connect = require("connect");
+var SessionSockets = require("session.socket.io");
 
 var config = require("./config.js");
 
@@ -99,11 +101,31 @@ function processMsg(log) {
 
 var app = express();
 
-app.use(express.cookieParser(generalOpt.cookieSecret));
-app.use(express.cookieSession());
+var cookieParser = express.cookieParser(generalOpt.cookieSecret);
+var sessionStore = new connect.middleware.session.MemoryStore();
 
+app.use(express.bodyParser());
+app.use(cookieParser);
+app.use(express.session({key: generalOpt.sessionKey, store: sessionStore}));
+
+app.post("/login", function(req, res) {
+    if (req.body.passphrase === generalOpt.password) {
+        req.session.verified = true;
+    } else {
+        req.session = null;
+    }
+    res.redirect("/");
+});
+app.get("/logout", function(req, res) {
+    req.session = null;
+    res.redirect("/");
+});
 app.get("/", function(req, res) {
-    res.sendfile(__dirname + "/tmpl/index.html");
+    if (req.session && req.session.verified) {
+        res.sendfile(__dirname + "/tmpl/index.html");
+    } else {
+        res.sendfile(__dirname + "/tmpl/login.html");
+    }
 });
 app.get("/alllogs", function(req, res) {
     res.send(logs);
@@ -117,7 +139,20 @@ httpServer.listen(httpOpt.port);
 
 var iolisten = io.listen(httpServer);
 iolisten.set('log level', 0);
-iolisten.sockets.on('connection', function(socket) {
+var sockets = new SessionSockets(iolisten, sessionStore, cookieParser, generalOpt.sessionKey);
+var socketAddr = function(socket) {
+    var address = socket.handshake.address;
+    return address.address + ":" + address.port;
+}
+sockets.on('connection', function(err, socket, session) {
+    if (err || !session.verified) {
+        console.log("invalid session");
+        socket.disconnect();
+        return;
+    }
+    console.log("new session accepted");
+    var addresses = _.map(broadcasting, socketAddr);
+    broadcastNewLogs([newLogItem("syslog", socketAddr(socket) + " CONNECTED (previous connections: " + addresses.join(",") + ")")]);
     broadcasting.push(socket);
     if (logs.length > 50) {
         socket.emit("log", logs.slice(logs.length - 50));
@@ -127,6 +162,7 @@ iolisten.sockets.on('connection', function(socket) {
     if (fixedTyping) {
         socket.emit("fixedTyping", fixedTyping);
     }
+    var addresses = _.map(broadcasting, socketAddr);
     socket.on("send", function(data) {
         var lowerCased = data.toLowerCase().trim();
         if (lowerCased === "/restart") {
@@ -137,18 +173,18 @@ iolisten.sockets.on('connection', function(socket) {
         } else if (lowerCased === "/save") {
             saveLog(function (filename, err) {
                 if (err) {
-                    broadcastNewLogs([newLogItem("log", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
+                    broadcastNewLogs([newLogItem("syslog", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
                 } else {
-                    broadcastNewLogs([newLogItem("log", "/saved to " + filename)]);
+                    broadcastNewLogs([newLogItem("syslog", "/saved to " + filename)]);
                 }
             });
         } else if (lowerCased === "/clear") {
             saveLog(function (filename, err) {
                 if (err) {
-                    broadcastNewLogs([newLogItem("log", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
+                    broadcastNewLogs([newLogItem("syslog", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
                 } else {
                     logs = [];
-                    broadcastNewLogs([newLogItem("log", "/clear logs after save logs to " + filename)]);
+                    broadcastNewLogs([newLogItem("syslog", "/clear logs after save logs to " + filename)]);
                 }
             });
         } else {
@@ -168,6 +204,8 @@ iolisten.sockets.on('connection', function(socket) {
     });
     socket.on("disconnect", function () {
         broadcasting.splice(broadcasting.indexOf(socket));
+        var addresses = _.map(broadcasting, socketAddr);
+        broadcastNewLogs([newLogItem("syslog", socketAddr(socket) + " DISCONNECTED (left connections: " + addresses.join(",") + ")")]);
     });
 });
 
