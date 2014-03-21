@@ -1,5 +1,9 @@
 var config = {};
 
+config.generalOpt = {
+    password: ""
+};
+
 config.ircOpt = {
     host: "chat.example.com",
     port: 6667,
