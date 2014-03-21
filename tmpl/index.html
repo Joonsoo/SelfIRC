@@ -34,7 +34,6 @@
                 var processLogs = function(data) {
                     var newmsg = false;
                     _.each(data, function(log) {
-                        var timestamp = new Date().toISOString();
                         var logDiv;
                         var msg = log.msg;
                         if (oldestLogId === null) oldestLogId = log.id;
@@ -44,7 +43,8 @@
                         } else {
                             logDiv = $("div[data-logid=" + log.id + "]");
                         }
-                        if (msg.substring(0, 4) === "PING" || msg.substring(0, 4) === "PONG") {
+                        if ((log.type === "sc" && msg.substring(0, 4) === "PING") || 
+                            (log.type === "cs" && msg.substring(0, 4) === "PONG")) {
                             logDiv.addClass("pingpong");
                         } else {
                             if (log.type === "sc") {
@@ -53,7 +53,7 @@
                                     var command = tokens[1].toUpperCase();
                                     switch (command) {
                                     case "PRIVMSG":
-                                        logDiv.attr("data-rawmsg", log.msg).attr("title", log.msg);
+                                        logDiv.attr("data-rawmsg", log.msg).attr("timestamp", log.timestamp);
                                         logDiv.addClass("chat");
                                         var msgbody = tokens[tokens.length - 1];
                                         var receiverFilter = null;
@@ -76,7 +76,7 @@
                                 }
                             }
                         }
-                        logDiv.attr("data-timestamp", timestamp).text(msg).addClass(log.type);
+                        logDiv.text(msg).attr("title", new Date(log.timestamp).toLocaleString()).addClass(log.type);
                         $("#allLogs").append(logDiv);
                     });
                     ensureLogOrder();
@@ -95,12 +95,19 @@
                         $("#older").hide();
                     }
                 });
+                socket.on("fixedTyping", function(data) {
+                    initText = data;
+                    if ($("#typing").val() === "") {
+                        $("#typing").val(initText);
+                    }
+                });
                 $("#typing").on("keydown", function(e) {
                     switch (e.keyCode) {
                     case 13:    // RETURN
                         var msg = $("#typing").val();
                         if (msg.charAt(0) === ':') {
                             initText = msg.substring(1);
+                            socket.emit("fixedTyping", initText);
                         } else {
                             socket.emit("send", msg.trim());
                         }
