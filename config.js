@@ -1,7 +1,8 @@
 var config = {};
 
 config.generalOpt = {
-    password: ""
+    password: "",
+    logPingPong: false
 };
 
 config.ircOpt = {
