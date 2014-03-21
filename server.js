@@ -128,7 +128,11 @@ app.get("/", function(req, res) {
     }
 });
 app.get("/alllogs", function(req, res) {
-    res.send(logs);
+    if (req.session && req.session.verified) {
+        res.send(logs);
+    } else {
+        res.redirect("/");
+    }
 });
 
 app.use(express.static(__dirname + "/static"));
