@@ -193,8 +193,16 @@ sockets.on('connection', function(err, socket, session) {
     });
     socket.on("older", function(data) {
         var oldest = data.clientOldest;
-        var start = oldest - 50;
-        socket.emit("older", _.filter(logs, function(log) { return log.id >= start && log.id < oldest; }));
+        if (oldest !== undefined) {
+            var oldestIndex;
+            for (var i = 0; i < logs.length; i++) {
+                if (logs[i].id >= oldest) {
+                    oldestIndex = i;
+                    break;
+                }
+            }
+            socket.emit("older", logs.slice(Math.max(0, oldestIndex - 50), oldestIndex));
+        }
     });
     socket.on("fixedTyping", function (data) {
         fixedTyping = data;
@@ -203,7 +211,7 @@ sockets.on('connection', function(err, socket, session) {
         });
     });
     socket.on("disconnect", function () {
-        broadcasting.splice(broadcasting.indexOf(socket));
+        broadcasting = _.reject(broadcasting, function(conn) { return conn === socket; });
         var addresses = _.map(broadcasting, socketAddr);
         broadcastNewLogs([newLogItem("syslog", socketAddr(socket) + " DISCONNECTED (left connections: " + addresses.join(",") + ")")]);
     });
