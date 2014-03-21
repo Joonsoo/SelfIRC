@@ -112,12 +112,12 @@ app.post("/login", function(req, res) {
     if (req.body.passphrase === generalOpt.password) {
         req.session.verified = true;
     } else {
-        req.session = null;
+        req.session.destroy();
     }
     res.redirect("/");
 });
 app.get("/logout", function(req, res) {
-    req.session = null;
+    req.session.destroy();
     res.redirect("/");
 });
 app.get("/", function(req, res) {
