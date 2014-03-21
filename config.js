@@ -1,8 +1,10 @@
 var config = {};
 
 config.generalOpt = {
+    timezone: "Asia/Seoul",
     password: "",
-    logPingPong: false
+    logPingPong: false,
+    cookieSecret: "not null"
 };
 
 config.ircOpt = {
