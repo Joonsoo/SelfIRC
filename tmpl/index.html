@@ -123,8 +123,9 @@
                     var myId = data.sessionId;
                     allSessions = data.allSessions;
                     allSockets = data.allSockets;
+                    var allConnectionsCount = _.reduce(allSockets, function(memo, v) { return memo + v; }, 0);
                     if (allSessions.length > 1) {
-                        $("#sessionBtn").text(myId + "(" + allSessions.length + ")");
+                        $("#sessionBtn").text(myId + "(" + allSessions.length + "/" + allConnectionsCount + ")");
                     } else {
                         $("#sessionBtn").text(myId);
                     }
