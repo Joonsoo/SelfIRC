@@ -108,8 +108,7 @@ app.use(express.bodyParser());
 app.use(cookieParser);
 app.use(express.session({
     key: generalOpt.sessionKey,
-    store: sessionStore,
-    expires: null
+    store: sessionStore
 }));
 
 var sessionIds = [];
@@ -131,6 +130,7 @@ app.post("/login", function(req, res) {
     if (req.body.passphrase === generalOpt.password) {
         var newSessionId = createSessionId();
         sessionIds.push(newSessionId);
+        req.session.cookie.maxAge = 1000*24*60*60*1000;     // remeber this user for 1000 days
         req.session.verified = newSessionId;
         broadcastNewLogs([newLogItem("syslog", "New session: " + newSessionId)]);
     } else {
