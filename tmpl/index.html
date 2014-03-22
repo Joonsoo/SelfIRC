@@ -103,17 +103,39 @@
                     }
                 });
                 var allSessions = [];
+                var allSockets = {};
+                var updateSessionsList = function() {
+                    $("#sessionsList").empty();
+                    _.each(allSessions, function(sessionId) {
+                        var connectionCount = allSockets[sessionId];
+                        var connCntMsg = connectionCount + " connection";
+                        if (!connectionCount) {
+                            connCntMsg = "no connection";
+                        } else if (connectionCount > 1) {
+                            connCntMsg += "s";
+                        }
+                        $("#sessionsList").append($("<div>").text(sessionId + "(" + connCntMsg + ")"));
+                    });
+                };
                 socket.on("allSessions", function(data) {
                     var myId = data.sessionId;
                     allSessions = data.allSessions;
+                    allSockets = data.allSockets;
                     if (allSessions.length > 1) {
                         $("#sessionBtn").text(myId + "(" + allSessions.length + ")");
                     } else {
                         $("#sessionBtn").text(myId);
                     }
+                    if ($("#sessionsListModal").is(":visible")) {
+                        updateSessionsList();
+                    }
                 });
                 socket.on("kickout", function(data) {
                     alert("You kicked out!");
+                    location.reload();
+                });
+                socket.on("logout", function(data) {
+                    alert("You signed out");
                     location.reload();
                 });
                 $("#typing").on("keydown", function(e) {
@@ -138,10 +160,7 @@
                     socket.emit("older", {clientOldest: oldestLogId});
                 });
                 $("#sessionBtn").on("click", function() {
-                    $("#sessionsList").empty();
-                    _.each(allSessions, function(sessionId) {
-                        $("#sessionsList").append($("<div>").text(sessionId));
-                    });
+                    updateSessionsList();
                     $("#sessionsListModal").modal('show');
                 });
                 $("#clearAllSessions").on("click", function() {

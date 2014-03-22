@@ -140,6 +140,20 @@ app.post("/login", function(req, res) {
     res.redirect("/");
 });
 app.get("/logout", function(req, res) {
+    if (req.session && isValidSessionId(req.session.verified)) {
+        var verified = req.session.verified;
+        broadcastNewLogs([newLogItem("syslog", "Session closed: " + verified)]);
+        setTimeout(function() {
+            _.each(broadcasting, function(socket) {
+                if (socket.__verified === verified) {
+                    socket.emit("logout");
+                    setTimeout(function() {
+                        socket.disconnect();
+                    }, 200);
+                }
+            });
+        }, 200);
+    }
     sessionIds = _.without(sessionIds, req.session.verified);
     broadcastAllSessions();
     req.session.destroy();
@@ -168,9 +182,12 @@ var httpServer = http.createServer(app);
 
 httpServer.listen(httpOpt.port);
 
+var allSocketsData = function() {
+    return _.countBy(broadcasting, function(socket) { return socket.__verified; });
+};
 var broadcastAllSessions = function() {
     _.each(broadcasting, function(socket) {
-        socket.emit("allSessions", {sessionId: socket.__session.verified, allSessions: sessionIds});
+        socket.emit("allSessions", {sessionId: socket.__session.verified, allSessions: sessionIds, allSockets: allSocketsData()});
     });
 };
 
@@ -191,8 +208,9 @@ sockets.on('connection', function(err, socket, session) {
     }
     console.log("new socket accepted");
     var addresses = _.map(broadcasting, socketAddr);
-    broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " CONNECTED (previous connections: " + addresses.join(",") + ")")]);
     socket.__session = session;
+    socket.__verified = session.verified;
+    broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " CONNECTED as " + socket.__verified + " (" + addresses.join(",") + ")")]);
     broadcasting.push(socket);
     if (logs.length > 50) {
         socket.emit("log", logs.slice(logs.length - 50));
@@ -202,13 +220,13 @@ sockets.on('connection', function(err, socket, session) {
     if (fixedTyping) {
         socket.emit("fixedTyping", fixedTyping);
     }
-    socket.emit("allSessions", {sessionId: session.verified, allSessions: sessionIds});
+    broadcastAllSessions();
     // allSessions will be emitted twice generally - when /login succeeded, when socket connected
     socket.on("clearSessions", function(data) {
         broadcastNewLogs([newLogItem("syslog", "/session " + session.verified + " cleared all other sessions")]);
         var aliveSockets = [];
         _.each(broadcasting, function(socket) {
-            if (socket.__session && socket.__session.verified === session.verified) {
+            if (socket.__verified === session.verified) {
                 aliveSockets.push(socket);
             } else {
                 socket.emit("kickout");
@@ -272,7 +290,8 @@ sockets.on('connection', function(err, socket, session) {
     socket.on("disconnect", function () {
         broadcasting = _.reject(broadcasting, function(conn) { return conn === socket; });
         var addresses = _.map(broadcasting, socketAddr);
-        broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " DISCONNECTED (left connections: " + addresses.join(",") + ")")]);
+        broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " DISCONNECTED (" + addresses.join(",") + ")")]);
+        broadcastAllSessions();
     });
 });
 
