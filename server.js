@@ -296,7 +296,7 @@ sockets.on('connection', function(err, socket, session) {
 
 var saveLog = function (donecb) {
     console.log("Saving logs...");
-    var filename = "./logs/SelfIRC-logs-" + (new Date().toString()) + ".txt";
+    var filename = "./SelfIRC-logs-" + (new Date().toString()) + ".txt";
     fs.writeFile(filename, JSON.stringify(logs), function(err) {
         console.log(err);
         if (donecb) {
