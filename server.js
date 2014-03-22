@@ -15,7 +15,6 @@ console.log(config);
 var generalOpt = config.generalOpt;
 var ircOpt = config.ircOpt;
 var httpOpt = config.httpOpt;
-var sqlOpt = config.sqlOpt;
 
 if (generalOpt.timezone) {
     process.env.TZ = generalOpt.timezone;
