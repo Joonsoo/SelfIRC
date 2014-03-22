@@ -3,7 +3,7 @@ var config = {};
 config.generalOpt = {
     timezone: "Asia/Seoul",
     sessionKey: "sessionkey",
-    password: "",
+    password: "password",
     logPingPong: false,
     cookieSecret: "not null"
 };
