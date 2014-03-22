@@ -5,6 +5,7 @@
         <script src="js/underscore.js"></script>
         <script src="js/jquery.js"></script>
         <script src="/socket.io/socket.io.js"></script>
+        <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
         <script>
             var windowTitle = "IRC";
             document.title = windowTitle;
@@ -101,6 +102,20 @@
                         $("#typing").val(initText);
                     }
                 });
+                var allSessions = [];
+                socket.on("allSessions", function(data) {
+                    var myId = data.sessionId;
+                    allSessions = data.allSessions;
+                    if (allSessions.length > 1) {
+                        $("#sessionBtn").text(myId + "(" + allSessions.length + ")");
+                    } else {
+                        $("#sessionBtn").text(myId);
+                    }
+                });
+                socket.on("kickout", function(data) {
+                    alert("You kicked out!");
+                    location.reload();
+                });
                 $("#typing").on("keydown", function(e) {
                     switch (e.keyCode) {
                     case 13:    // RETURN
@@ -122,6 +137,17 @@
                 $("#older").on("click", function() {
                     socket.emit("older", {clientOldest: oldestLogId});
                 });
+                $("#sessionBtn").on("click", function() {
+                    $("#sessionsList").empty();
+                    _.each(allSessions, function(sessionId) {
+                        $("#sessionsList").append($("<div>").text(sessionId));
+                    });
+                    $("#sessionsListModal").modal('show');
+                });
+                $("#clearAllSessions").on("click", function() {
+                    socket.emit("clearSessions");
+                    $("#sessionsListModal").modal('hide');
+                });
                 $("#typing").focus();
             });
         </script>
@@ -130,7 +156,8 @@
             .cs { color: green; }
             .sc { color: lightGray; }
             .log { color: lightGray; }
-            .syslog { color: black; }
+            .syslog { color: darkGray; }
+            .syslog2 { color: lightGray; }
             .pingpong { display: none; }
             .sc.chat { color: blue; }
             #allLogs {
@@ -149,12 +176,35 @@
                 margin: 0;
                 padding: 0 8px 0 8px;
             }
+            #sessionBtn {
+                position: fixed;
+                right: 0;
+                top: 0;
+            }
         </style>
     </head>
     <body>
         <div id="older" class="btn btn-default btn-block">Retrieve older logs</div>
         <a href="/logout" class="btn btn-default btn-block">Logout</a>
         <div id="allLogs"></div>
+        <div id="sessionBtn" class="btn btn-default">Session</div>
+        <div class="modal fade" id="sessionsListModal" tabindex="-1" role="dialog" aria-labelledby="All Sessions" aria-hidden="true">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                        <h4 class="modal-title">All Sessions</h4>
+                    </div>
+                    <div class="modal-body" id="sessionsList">
+                        Session Ids
+                    </div>
+                    <div class="modal-footer">
+                        <button id="clearAllSessions" type="button" class="btn btn-default">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <textarea id="typing"></textarea>
     </body>
 </html>

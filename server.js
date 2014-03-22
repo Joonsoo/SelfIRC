@@ -106,29 +106,56 @@ var sessionStore = new connect.middleware.session.MemoryStore();
 
 app.use(express.bodyParser());
 app.use(cookieParser);
-app.use(express.session({key: generalOpt.sessionKey, store: sessionStore}));
+app.use(express.session({
+    key: generalOpt.sessionKey,
+    store: sessionStore,
+    expires: null
+}));
 
+var sessionIds = [];
+var createSessionId = function() {
+    var generateRandomKey = function() {
+        return "" + Math.round(Math.random() * 10000);
+    }
+    var randomKey = generateRandomKey();
+    while (_.contains(sessionIds, randomKey)) {
+        randomKey = generateRandomKey();
+    }
+    return randomKey;
+};
+var isValidSessionId = function(sessionId) {
+    console.log(sessionIds, sessionId);
+    return _.contains(sessionIds, sessionId);
+}
 app.post("/login", function(req, res) {
     if (req.body.passphrase === generalOpt.password) {
-        req.session.verified = true;
+        var newSessionId = createSessionId();
+        sessionIds.push(newSessionId);
+        req.session.verified = newSessionId;
+        broadcastNewLogs([newLogItem("syslog", "New session: " + newSessionId)]);
     } else {
         req.session.destroy();
     }
+    broadcastAllSessions();
     res.redirect("/");
 });
 app.get("/logout", function(req, res) {
+    sessionIds = _.without(sessionIds, req.session.verified);
+    broadcastAllSessions();
     req.session.destroy();
     res.redirect("/");
 });
 app.get("/", function(req, res) {
-    if (req.session && req.session.verified) {
+    console.log("/");
+    console.log(req.session);
+    if (req.session && isValidSessionId(req.session.verified)) {
         res.sendfile(__dirname + "/tmpl/index.html");
     } else {
         res.sendfile(__dirname + "/tmpl/login.html");
     }
 });
 app.get("/alllogs", function(req, res) {
-    if (req.session && req.session.verified) {
+    if (req.session && isValidSessionId(req.session.verified)) {
         res.send(logs);
     } else {
         res.redirect("/");
@@ -141,6 +168,12 @@ var httpServer = http.createServer(app);
 
 httpServer.listen(httpOpt.port);
 
+var broadcastAllSessions = function() {
+    _.each(broadcasting, function(socket) {
+        socket.emit("allSessions", {sessionId: socket.__session.verified, allSessions: sessionIds});
+    });
+};
+
 var iolisten = io.listen(httpServer);
 iolisten.set('log level', 0);
 var sockets = new SessionSockets(iolisten, sessionStore, cookieParser, generalOpt.sessionKey);
@@ -149,14 +182,17 @@ var socketAddr = function(socket) {
     return address.address + ":" + address.port;
 }
 sockets.on('connection', function(err, socket, session) {
-    if (err || !session.verified) {
-        console.log("invalid session");
+    console.log("socket connection");
+    console.log(session);
+    if (err || (!session || !isValidSessionId(session.verified))) {
+        console.log("invalid socket session");
         socket.disconnect();
         return;
     }
-    console.log("new session accepted");
+    console.log("new socket accepted");
     var addresses = _.map(broadcasting, socketAddr);
-    broadcastNewLogs([newLogItem("syslog", socketAddr(socket) + " CONNECTED (previous connections: " + addresses.join(",") + ")")]);
+    broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " CONNECTED (previous connections: " + addresses.join(",") + ")")]);
+    socket.__session = session;
     broadcasting.push(socket);
     if (logs.length > 50) {
         socket.emit("log", logs.slice(logs.length - 50));
@@ -166,6 +202,25 @@ sockets.on('connection', function(err, socket, session) {
     if (fixedTyping) {
         socket.emit("fixedTyping", fixedTyping);
     }
+    socket.emit("allSessions", {sessionId: session.verified, allSessions: sessionIds});
+    // allSessions will be emitted twice generally - when /login succeeded, when socket connected
+    socket.on("clearSessions", function(data) {
+        broadcastNewLogs([newLogItem("syslog", "/session " + session.verified + " cleared all other sessions")]);
+        var aliveSockets = [];
+        _.each(broadcasting, function(socket) {
+            if (socket.__session && socket.__session.verified === session.verified) {
+                aliveSockets.push(socket);
+            } else {
+                socket.emit("kickout");
+                setTimeout(function() {
+                    socket.disconnect();
+                }, 200);
+            }
+        });
+        sessionIds = [session.verified];
+        broadcasting = aliveSockets;
+        broadcastAllSessions();
+    });
     var addresses = _.map(broadcasting, socketAddr);
     socket.on("send", function(data) {
         var lowerCased = data.toLowerCase().trim();
@@ -217,7 +272,7 @@ sockets.on('connection', function(err, socket, session) {
     socket.on("disconnect", function () {
         broadcasting = _.reject(broadcasting, function(conn) { return conn === socket; });
         var addresses = _.map(broadcasting, socketAddr);
-        broadcastNewLogs([newLogItem("syslog", socketAddr(socket) + " DISCONNECTED (left connections: " + addresses.join(",") + ")")]);
+        broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " DISCONNECTED (left connections: " + addresses.join(",") + ")")]);
     });
 });
 
