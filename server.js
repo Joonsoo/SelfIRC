@@ -210,7 +210,7 @@ sockets.on('connection', function(err, socket, session) {
     var addresses = _.map(broadcasting, socketAddr);
     socket.__session = session;
     socket.__verified = session.verified;
-    broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " CONNECTED as " + socket.__verified + " (" + addresses.join(",") + ")")]);
+    broadcastNewLogs([newLogItem("syslog2", socket.__verified + "(" + socketAddr(socket) + ") connected")]);
     broadcasting.push(socket);
     if (logs.length > 50) {
         socket.emit("log", logs.slice(logs.length - 50));
@@ -290,7 +290,7 @@ sockets.on('connection', function(err, socket, session) {
     socket.on("disconnect", function () {
         broadcasting = _.reject(broadcasting, function(conn) { return conn === socket; });
         var addresses = _.map(broadcasting, socketAddr);
-        broadcastNewLogs([newLogItem("syslog2", socketAddr(socket) + " DISCONNECTED (" + addresses.join(",") + ")")]);
+        broadcastNewLogs([newLogItem("syslog2", socket.__verified + "(" + socketAddr(socket) + ") disconnected")]);
         broadcastAllSessions();
     });
 });
