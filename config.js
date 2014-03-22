@@ -20,11 +20,4 @@ config.httpOpt = {
     port: 8911
 };
 
-config.sqlOpt = {
-    host: "localhost",
-    user: "",
-    password: "",
-    db: ""
-};
-
 module.exports = config;
