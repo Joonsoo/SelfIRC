@@ -175,7 +175,7 @@ app.get("/alllogs", function(req, res) {
     }
 });
 
-app.use(express.static(__dirname + "/static"));
+// app.use(express.static(__dirname + "/static"));
 
 var httpServer = http.createServer(app);
 
