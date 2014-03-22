@@ -116,6 +116,8 @@
                         }
                         $("#sessionsList").append($("<div>").text(sessionId + "(" + connCntMsg + ")"));
                     });
+                    var allConnectionsCount = _.reduce(allSockets, function(memo, v) { return memo + v; }, 0);
+                    $("#sessionsList").append($("<div>").text("=> Total " + allConnectionsCount + " connection" + ((allConnectionsCount > 1)? "s":"")));
                 };
                 socket.on("allSessions", function(data) {
                     var myId = data.sessionId;
@@ -204,7 +206,6 @@
     </head>
     <body>
         <div id="older" class="btn btn-default btn-block">Retrieve older logs</div>
-        <a href="/logout" class="btn btn-default btn-block">Logout</a>
         <div id="allLogs"></div>
         <div id="sessionBtn" class="btn btn-default">Session</div>
         <div class="modal fade" id="sessionsListModal" tabindex="-1" role="dialog" aria-labelledby="All Sessions" aria-hidden="true">
@@ -219,7 +220,8 @@
                         Session Ids
                     </div>
                     <div class="modal-footer">
-                        <button id="clearAllSessions" type="button" class="btn btn-default">Clear</button>
+                        <button id="clearAllSessions" type="button" class="btn btn-default">Kickout others</button>
+                        <a href="/logout" class="btn btn-default">Logout</a>
                     </div>
                 </div>
             </div>
