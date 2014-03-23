@@ -234,6 +234,8 @@ sockets.on('connection', function(err, socket, session) {
                 }, 200);
             }
         });
+        // TODO should clear real session store
+        // OR should not use the same session id again
         sessionIds = [session.verified];
         broadcasting = aliveSockets;
         broadcastAllSessions();
