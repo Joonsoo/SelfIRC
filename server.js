@@ -1,7 +1,15 @@
 console.log('This process is pid ' + process.pid);
+var runId = "" + Math.random();
+
+var redis = require("redis"),
+    redisClient = redis.createClient();
+
+redisClient.on("error", function (err) {
+    console.log("Error " + err);
+});
+
 
 var net = require("net");
-var fs = require("fs");
 var http = require("http");
 var _ = require("underscore");
 var express = require("express");
@@ -21,20 +29,32 @@ if (generalOpt.timezone) {
     console.log(new Date().toString());
 }
 
-var logs = [];
 var lastServerMsg = null;
 var broadcasting = [];
 
 var ircSeparator = "\n\r";
 
+var userId = "self";
+var logsPostfix = ":logs";
+
 var logId = 0;
+var lastTS = 0;
 function newLogItem(type, msg) {
-    var newlog = {type: type, id: logId++, msg: msg, timestamp: new Date().getTime()};
+    var ts = new Date().getTime();
+    if (ts !== lastTS) {
+        logId = 0;
+        lastTS = ts;
+    }
+    var newlog = {type: type, id: (ts * 1000) + ((logId++) % 1000), msg: msg, timestamp: ts, runId: runId};
     var isAutoPingPong = ((type === "sc" && msg.substring(0, 4) === "PING") || (type === "cs" && msg.substring(0, 4) === "PONG"));
     if (generalOpt.logPingPong || !isAutoPingPong) {
-        logs.push(newlog);
+        redisClient.lpush(userId + logsPostfix, JSON.stringify(newlog));
+        newlog.recorded = true;
     }
     return newlog;
+}
+
+function updateLog(log) {
 }
 
 var client;
@@ -46,7 +66,7 @@ function write(msg) {
 }
 function startIRC() {
     client = net.connect({host: "chat.freenode.net", port: 6667}, function() {
-        broadcastNewLogs([newLogItem("log", "Client connected")]);
+        broadcastNewLogs([newLogItem("log", "Client connected pid=" + process.pid + ", runid=" + runId + " at " + new Date())]);
         console.log("Client connected");
         // USER Joonsoo . . :Joonsoo Jeon
         // NICK Joonsoo1
@@ -63,6 +83,7 @@ function startIRC() {
         var newlogs = [];
         if (lastServerMsg) {
             lastServerMsg.msg += lines[0];
+            updateLog(lastServerMsg);
             newlogs.push(lastServerMsg);
         } else {
             lastServerMsg = newLogItem("sc", lines[0]);
@@ -167,13 +188,7 @@ app.get("/", function(req, res) {
         res.sendfile(__dirname + "/tmpl/login.html");
     }
 });
-app.get("/alllogs", function(req, res) {
-    if (req.session && isValidSessionId(req.session.verified)) {
-        res.send(logs);
-    } else {
-        res.redirect("/");
-    }
-});
+// alllogs is removed
 
 // app.use(express.static(__dirname + "/static"));
 
@@ -197,6 +212,17 @@ var socketAddr = function(socket) {
     var address = socket.handshake.address;
     return address.address + ":" + address.port;
 }
+
+function clinetLogs(logs, index) {
+    var result = [];
+    for (var i = 0; i < logs.length; i++) {
+        var json = JSON.parse(logs[i]);
+        json.idx = index++;
+        result.push(json);
+    }
+    return result;
+}
+
 sockets.on('connection', function(err, socket, session) {
     console.log("socket connection");
     console.log(session);
@@ -211,15 +237,16 @@ sockets.on('connection', function(err, socket, session) {
     socket.__verified = session.verified;
     broadcastNewLogs([newLogItem("syslog2", socket.__verified + "(" + socketAddr(socket) + ") connected")]);
     broadcasting.push(socket);
-    if (logs.length > 50) {
-        socket.emit("log", logs.slice(logs.length - 50));
-    } else {
-        socket.emit("log", logs);
-    }
+    redisClient.lrange(userId + logsPostfix, 0, 49, function(err, replies) {
+        if (!err) {
+            socket.emit("log", clinetLogs(replies, 0));
+        }
+    });
     if (fixedTyping) {
         socket.emit("fixedTyping", fixedTyping);
     }
     broadcastAllSessions();
+    socket.emit("serverInfo", {runId: runId});
     // allSessions will be emitted twice generally - when /login succeeded, when socket connected
     socket.on("clearSessions", function(data) {
         broadcastNewLogs([newLogItem("syslog", "/session " + session.verified + " cleared all other sessions")]);
@@ -246,38 +273,18 @@ sockets.on('connection', function(err, socket, session) {
             if (client) client.end();
             client = null;
             startIRC();
-        } else if (lowerCased === "/save") {
-            saveLog(function (filename, err) {
-                if (err) {
-                    broadcastNewLogs([newLogItem("syslog", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
-                } else {
-                    broadcastNewLogs([newLogItem("syslog", "/saved to " + filename)]);
-                }
-            });
-        } else if (lowerCased === "/clear") {
-            saveLog(function (filename, err) {
-                if (err) {
-                    broadcastNewLogs([newLogItem("syslog", "/error while saving to " + filename + " -- " + JSON.stringify(err))]);
-                } else {
-                    logs = [];
-                    broadcastNewLogs([newLogItem("syslog", "/clear logs after save logs to " + filename)]);
-                }
-            });
         } else {
             write(data);
         }
     });
     socket.on("older", function(data) {
-        var oldest = data.clientOldest;
-        if (oldest !== undefined) {
-            var oldestIndex;
-            for (var i = 0; i < logs.length; i++) {
-                if (logs[i].id >= oldest) {
-                    oldestIndex = i;
-                    break;
+        var oldestIndex = data.clientOldestIndex;
+        if (oldestIndex !== undefined) {
+            redisClient.lrange(userId + logsPostfix, oldestIndex + 1, oldestIndex + 50, function (err, replies) {
+                if (!err) {
+                    socket.emit("older", clinetLogs(replies, oldestIndex));
                 }
-            }
-            socket.emit("older", logs.slice(Math.max(0, oldestIndex - 50), oldestIndex));
+            });
         }
     });
     socket.on("fixedTyping", function (data) {
@@ -293,17 +300,3 @@ sockets.on('connection', function(err, socket, session) {
         broadcastAllSessions();
     });
 });
-
-var saveLog = function (donecb) {
-    console.log("Saving logs...");
-    var filename = "./SelfIRC-logs-" + (new Date().toString()) + ".txt";
-    fs.writeFile(filename, JSON.stringify(logs), function(err) {
-        console.log(err);
-        if (donecb) {
-            donecb(filename, err);
-        }
-    });
-    return filename;
-};
-setInterval(saveLog, 8*60*60*1000);		// every 8 hours
-process.on("exit", saveLog);			// on exit

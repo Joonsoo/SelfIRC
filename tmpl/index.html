@@ -11,7 +11,8 @@
             document.title = windowTitle;
             $(document).ready(function() {
                 var socket = io.connect();
-                var oldestLogId = null;
+                var serverInfo = {};
+                var oldestLogIndex = 0;
                 var initText = "";
                 var scrollToBottom = function() {
                     $(document).scrollTop($("#allLogs").prop("scrollHeight"));
@@ -34,11 +35,16 @@
                 };
                 var processLogs = function(data) {
                     var newmsg = false;
+                    var newrecords = 0;
                     _.each(data, function(log) {
                         var logDiv;
                         var msg = log.msg;
-                        if (oldestLogId === null) oldestLogId = log.id;
-                        if (oldestLogId > log.id) oldestLogId = log.id;
+                        if (log.idx) {
+                            if (oldestLogIndex === null) oldestLogIndex = log.idx;
+                            if (oldestLogIndex < log.idx) oldestLogIndex = log.idx;
+                        } else if (log.recorded) {
+                            newrecords += 1;
+                        }
                         if ($("div[data-logid=" + log.id + "]").length === 0) {
                             logDiv = $("<div>").attr("data-logid", log.id);
                         } else {
@@ -77,12 +83,20 @@
                                 }
                             }
                         }
-                        logDiv.text(msg).attr("title", new Date(log.timestamp).toLocaleString()).addClass(log.type);
+                        logDiv.text(msg)
+                            .attr("data-runId", log.runId)
+                            .attr("title", new Date(log.timestamp).toLocaleString())
+                            .addClass(log.type);
                         $("#allLogs").append(logDiv);
                     });
+                    oldestLogIndex += newrecords;
                     ensureLogOrder();
                     return newmsg;
                 };
+                socket.on("serverInfo", function(data) {
+                    serverInfo = data;
+                    console.log(serverInfo);
+                });
                 socket.on("log", function(data) {
                     var newmsg = processLogs(data);
                     if (newmsg && !$("#typing").is(":focus")) {
@@ -160,7 +174,7 @@
                     document.title = windowTitle;
                 });
                 $("#older").on("click", function() {
-                    socket.emit("older", {clientOldest: oldestLogId});
+                    socket.emit("older", {clientOldestIndex: oldestLogIndex});
                 });
                 $("#sessionBtn").on("click", function() {
                     updateSessionsList();
@@ -176,10 +190,10 @@
         <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
         <style>
             .cs { color: green; }
-            .sc { color: lightGray; }
-            .log { color: lightGray; }
-            .syslog { color: darkGray; }
-            .syslog2 { color: lightGray; }
+            .sc { color: #aaa; }
+            .log { color: #aaa; }
+            .syslog { color: #888; }
+            .syslog2 { color: #aaa; }
             .pingpong { display: none; }
             .sc.chat { color: blue; }
             #allLogs {

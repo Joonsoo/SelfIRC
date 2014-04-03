@@ -1,12 +1,14 @@
 {
     "name": "selfirc",
-    "version": "0.0.1",
+    "version": "0.1.0-SNAPSHOT",
     "main": "server.js",
     "dependencies": {
         "express":"3.4.8",
         "socket.io":"0.9.16",
         "underscore":"1.6.0",
         "connect":"2.14.3",
-        "session.socket.io": "0.1.6"
+        "session.socket.io": "0.1.6",
+        "redis": "0.10.1",
+        "hiredis": "0.1.16"         // hiredis is optional
     }
 }
